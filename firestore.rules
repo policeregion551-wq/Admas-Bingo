@@ -1,0 +1,288 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny all paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidDateKey(val) {
+      return val is string && val.size() == 10 && val.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidUserAccount(data, userId) {
+      return data.keys().hasAll([
+        'uid', 'displayName', 'email', 'balance', 'totalBonusClaimed',
+        'totalWithdrawn', 'totalWagered', 'totalWon', 'gamesPlayed',
+        'gamesWon', 'lastBonusDate', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'uid', 'displayName', 'email', 'balance', 'totalBonusClaimed',
+        'totalDeposited', 'totalWithdrawn', 'totalWagered', 'totalWon',
+        'gamesPlayed', 'gamesWon', 'lastBonusDate', 'createdAt', 'updatedAt'
+      ])
+      && data.uid is string && data.uid == userId && data.uid == request.auth.uid
+      && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+      && data.email is string && data.email.size() >= 3 && data.email.size() <= 120
+      && data.balance is number && data.balance >= 0 && data.balance <= 100000000
+      && data.totalBonusClaimed is number && data.totalBonusClaimed >= 0 && data.totalBonusClaimed <= 1000000000
+      && (!data.keys().hasAny(['totalDeposited']) || (data.totalDeposited is number && data.totalDeposited >= 0 && data.totalDeposited <= 1000000000))
+      && data.totalWithdrawn is number && data.totalWithdrawn >= 0 && data.totalWithdrawn <= 1000000000
+      && data.totalWagered is number && data.totalWagered >= 0 && data.totalWagered <= 1000000000
+      && data.totalWon is number && data.totalWon >= 0 && data.totalWon <= 1000000000
+      && data.gamesPlayed is int && data.gamesPlayed >= 0 && data.gamesPlayed <= 1000000
+      && data.gamesWon is int && data.gamesWon >= 0 && data.gamesWon <= 1000000
+      && data.lastBonusDate is string && data.lastBonusDate.size() <= 10
+      && (data.lastBonusDate == '' || isValidDateKey(data.lastBonusDate))
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidBonusClaim(data, userId, claimId) {
+      return data.keys().hasAll(['uid', 'dateKey', 'amount', 'claimedAt'])
+      && data.keys().hasOnly(['uid', 'dateKey', 'amount', 'claimedAt'])
+      && data.uid is string && data.uid == userId && data.uid == request.auth.uid
+      && isValidDateKey(data.dateKey) && data.dateKey == claimId
+      && data.amount is number && data.amount == 100000
+      && data.claimedAt is timestamp && data.claimedAt == request.time;
+    }
+
+    function isValidDeposit(data, userId) {
+      return data.keys().hasAll([
+        'uid', 'amount', 'method', 'accountNumber', 'accountHolder',
+        'transactionRef', 'referenceCode', 'status', 'createdAt'
+      ])
+      && data.keys().hasOnly([
+        'uid', 'amount', 'method', 'accountNumber', 'accountHolder',
+        'transactionRef', 'referenceCode', 'status', 'createdAt'
+      ])
+      && data.uid is string && data.uid == userId && data.uid == request.auth.uid
+      && data.amount is number && data.amount > 0 && data.amount <= 10000000
+      && data.method is string && data.method.size() >= 3 && data.method.size() <= 30
+      && data.method in ['telebirr', 'cbe_bank']
+      && data.accountNumber is string && data.accountNumber.size() >= 4 && data.accountNumber.size() <= 40
+      && data.accountHolder is string && data.accountHolder.size() >= 2 && data.accountHolder.size() <= 80
+      && data.transactionRef is string && data.transactionRef.size() >= 4 && data.transactionRef.size() <= 40
+      && data.referenceCode is string && data.referenceCode.size() >= 6 && data.referenceCode.size() <= 32
+      && data.status is string && data.status == 'completed'
+      && data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidWithdrawal(data, userId) {
+      return data.keys().hasAll([
+        'uid', 'amount', 'method', 'accountNumber', 'accountHolder',
+        'referenceCode', 'status', 'createdAt'
+      ])
+      && data.keys().hasOnly([
+        'uid', 'amount', 'method', 'accountNumber', 'accountHolder',
+        'referenceCode', 'status', 'createdAt'
+      ])
+      && data.uid is string && data.uid == userId && data.uid == request.auth.uid
+      && data.amount is number && data.amount > 0 && data.amount <= 10000000
+      && data.method is string && data.method.size() >= 3 && data.method.size() <= 30
+      && data.method in ['telebirr', 'cbe_birr', 'cbe_bank', 'awash_bank', 'abyssinia_bank']
+      && data.accountNumber is string && data.accountNumber.size() >= 4 && data.accountNumber.size() <= 40
+      && data.accountHolder is string && data.accountHolder.size() >= 2 && data.accountHolder.size() <= 80
+      && data.referenceCode is string && data.referenceCode.size() >= 6 && data.referenceCode.size() <= 32
+      && data.status is string && data.status == 'completed'
+      && data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidBingoRound(data, userId) {
+      return data.keys().hasAll([
+        'uid', 'stake', 'payout', 'multiplier', 'ballsDrawnCount',
+        'pattern', 'outcome', 'createdAt'
+      ])
+      && data.keys().hasOnly([
+        'uid', 'stake', 'payout', 'multiplier', 'ballsDrawnCount',
+        'pattern', 'outcome', 'createdAt'
+      ])
+      && data.uid is string && data.uid == userId && data.uid == request.auth.uid
+      && data.stake is number && data.stake > 0 && data.stake <= 1000000
+      && data.payout is number && data.payout >= 0 && data.payout <= 10000000
+      && data.multiplier is number && data.multiplier >= 0 && data.multiplier <= 20
+      && data.ballsDrawnCount is int && data.ballsDrawnCount >= 0 && data.ballsDrawnCount <= 75
+      && data.pattern is string && data.pattern.size() >= 3 && data.pattern.size() <= 30
+      && data.pattern in ['row', 'column', 'diagonal', 'four_corners', 'none']
+      && data.outcome is string && data.outcome.size() >= 3 && data.outcome.size() <= 10
+      && data.outcome in ['won', 'lost']
+      && data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidTransaction(data, userId) {
+      return data.keys().hasAll([
+        'uid', 'type', 'amount', 'direction', 'balanceAfter',
+        'description', 'referenceId', 'createdAt'
+      ])
+      && data.keys().hasOnly([
+        'uid', 'type', 'amount', 'direction', 'balanceAfter',
+        'description', 'referenceId', 'createdAt'
+      ])
+      && data.uid is string && data.uid == userId && data.uid == request.auth.uid
+      && data.type is string && data.type.size() >= 3 && data.type.size() <= 20
+      && data.type in ['daily_bonus', 'deposit', 'withdrawal', 'bingo_wager', 'bingo_win']
+      && data.amount is number && data.amount > 0 && data.amount <= 10000000
+      && data.direction is string && data.direction.size() >= 5 && data.direction.size() <= 10
+      && data.direction in ['credit', 'debit']
+      && data.balanceAfter is number && data.balanceAfter >= 0 && data.balanceAfter <= 100000000
+      && data.description is string && data.description.size() >= 2 && data.description.size() <= 140
+      && data.referenceId is string && data.referenceId.size() >= 2 && data.referenceId.size() <= 64
+      && data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserAccount(incoming(), userId)
+        && incoming().balance == 0
+        && incoming().totalBonusClaimed == 0
+        && (!incoming().keys().hasAny(['totalDeposited']) || incoming().totalDeposited == 0)
+        && incoming().totalWithdrawn == 0
+        && incoming().totalWagered == 0
+        && incoming().totalWon == 0
+        && incoming().gamesPlayed == 0
+        && incoming().gamesWon == 0
+        && incoming().lastBonusDate == ''
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserAccount(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Claim daily 100,000 ETB bonus (atomic with bonusClaims/{dateKey})
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'totalBonusClaimed', 'lastBonusDate', 'updatedAt'])
+            && isValidDateKey(incoming().lastBonusDate)
+            && incoming().lastBonusDate != existing().lastBonusDate
+            && incoming().balance == existing().balance + 100000
+            && incoming().totalBonusClaimed == existing().totalBonusClaimed + 100000
+            && !exists(/databases/$(database)/documents/users/$(userId)/bonusClaims/$(incoming().lastBonusDate))
+            && existsAfter(/databases/$(database)/documents/users/$(userId)/bonusClaims/$(incoming().lastBonusDate))
+          )
+          ||
+          // Action 2: Withdraw funds
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'totalWithdrawn', 'updatedAt'])
+            && incoming().balance < existing().balance
+            && incoming().balance >= 0
+            && incoming().totalWithdrawn == existing().totalWithdrawn + (existing().balance - incoming().balance)
+          )
+          ||
+          // Action 3: Start Bingo round (wager debit)
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'totalWagered', 'gamesPlayed', 'updatedAt'])
+            && incoming().balance < existing().balance
+            && incoming().balance >= 0
+            && (existing().balance - incoming().balance) <= 1000000
+            && incoming().totalWagered == existing().totalWagered + (existing().balance - incoming().balance)
+            && incoming().gamesPlayed == existing().gamesPlayed + 1
+          )
+          ||
+          // Action 4: Bingo win payout credit
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'totalWon', 'gamesWon', 'updatedAt'])
+            && incoming().balance > existing().balance
+            && (incoming().balance - existing().balance) <= 10000000
+            && incoming().totalWon == existing().totalWon + (incoming().balance - existing().balance)
+            && incoming().gamesWon == existing().gamesWon + 1
+          )
+          ||
+          // Action 5: Deposit funds via Telebirr or CBE
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'totalDeposited', 'updatedAt'])
+            && incoming().balance > existing().balance
+            && (incoming().balance - existing().balance) <= 10000000
+            && incoming().totalDeposited is number
+            && (
+              (existing().keys().hasAny(['totalDeposited']) && incoming().totalDeposited == existing().totalDeposited + (incoming().balance - existing().balance))
+              || (!existing().keys().hasAny(['totalDeposited']) && incoming().totalDeposited == (incoming().balance - existing().balance))
+            )
+          )
+        );
+
+      allow delete: if false;
+
+      match /bonusClaims/{claimId} {
+        allow get: if isValidId(userId) && isValidId(claimId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(claimId) && isOwner(userId)
+          && isValidBonusClaim(incoming(), userId, claimId)
+          && existsAfter(/databases/$(database)/documents/users/$(userId));
+        allow update, delete: if false;
+      }
+
+      match /deposits/{depositId} {
+        allow get: if isValidId(userId) && isValidId(depositId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(depositId) && isOwner(userId)
+          && isValidDeposit(incoming(), userId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && getAfter(/databases/$(database)/documents/users/$(userId)).data.balance
+             == get(/databases/$(database)/documents/users/$(userId)).data.balance + incoming().amount;
+        allow update, delete: if false;
+      }
+
+      match /withdrawals/{withdrawalId} {
+        allow get: if isValidId(userId) && isValidId(withdrawalId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(withdrawalId) && isOwner(userId)
+          && isValidWithdrawal(incoming(), userId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && getAfter(/databases/$(database)/documents/users/$(userId)).data.balance
+             == get(/databases/$(database)/documents/users/$(userId)).data.balance - incoming().amount;
+        allow update, delete: if false;
+      }
+
+      match /bingoRounds/{roundId} {
+        allow get: if isValidId(userId) && isValidId(roundId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(roundId) && isOwner(userId)
+          && isValidBingoRound(incoming(), userId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && (
+            incoming().outcome == 'lost'
+            || getAfter(/databases/$(database)/documents/users/$(userId)).data.balance
+               == get(/databases/$(database)/documents/users/$(userId)).data.balance + incoming().payout
+          );
+        allow update, delete: if false;
+      }
+
+      match /transactions/{txId} {
+        allow get: if isValidId(userId) && isValidId(txId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(txId) && isOwner(userId)
+          && isValidTransaction(incoming(), userId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow update, delete: if false;
+      }
+    }
+  }
+}

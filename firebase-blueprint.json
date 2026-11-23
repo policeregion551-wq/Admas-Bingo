@@ -1,0 +1,359 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Private member profile and ETB wallet state for the Bingo and Daily Bonus system.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the member.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Member display name.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified member email address.",
+          "maxLength": 120
+        },
+        "balance": {
+          "type": "number",
+          "description": "Current available ETB balance (playable and withdrawable)."
+        },
+        "totalBonusClaimed": {
+          "type": "number",
+          "description": "Cumulative ETB claimed from daily 100,000 Birr bonuses."
+        },
+        "totalDeposited": {
+          "type": "number",
+          "description": "Cumulative ETB deposited via Telebirr or CBE."
+        },
+        "totalWithdrawn": {
+          "type": "number",
+          "description": "Cumulative ETB withdrawn by the member."
+        },
+        "totalWagered": {
+          "type": "number",
+          "description": "Cumulative ETB wagered in Bingo rounds."
+        },
+        "totalWon": {
+          "type": "number",
+          "description": "Cumulative ETB won in Bingo rounds."
+        },
+        "gamesPlayed": {
+          "type": "number",
+          "description": "Total Bingo rounds started."
+        },
+        "gamesWon": {
+          "type": "number",
+          "description": "Total Bingo rounds won."
+        },
+        "lastBonusDate": {
+          "type": "string",
+          "description": "YYYY-MM-DD key of the most recent daily bonus claim, or empty string.",
+          "maxLength": 10,
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of account creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last account update."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "balance",
+        "totalBonusClaimed",
+        "totalWithdrawn",
+        "totalWagered",
+        "totalWon",
+        "gamesPlayed",
+        "gamesWon",
+        "lastBonusDate",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BonusClaim": {
+      "title": "BonusClaim",
+      "description": "Daily 100,000 ETB bonus claim record keyed by YYYY-MM-DD.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "dateKey": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Fixed daily bonus amount of 100000 ETB."
+        },
+        "claimedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "dateKey", "amount", "claimedAt"]
+    },
+    "DepositRecord": {
+      "title": "DepositRecord",
+      "description": "Member deposit record via Telebirr or Commercial Bank of Ethiopia.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "method": {
+          "type": "string",
+          "enum": ["telebirr", "cbe_bank"],
+          "maxLength": 30
+        },
+        "accountNumber": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 40
+        },
+        "accountHolder": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "transactionRef": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 40
+        },
+        "referenceCode": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 32
+        },
+        "status": {
+          "type": "string",
+          "enum": ["completed"],
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "amount",
+        "method",
+        "accountNumber",
+        "accountHolder",
+        "transactionRef",
+        "referenceCode",
+        "status",
+        "createdAt"
+      ]
+    },
+    "WithdrawalRecord": {
+      "title": "WithdrawalRecord",
+      "description": "Member withdrawal request and instant receipt record.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "method": {
+          "type": "string",
+          "enum": ["telebirr", "cbe_birr", "cbe_bank", "awash_bank", "abyssinia_bank"],
+          "maxLength": 30
+        },
+        "accountNumber": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 40
+        },
+        "accountHolder": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "referenceCode": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 32
+        },
+        "status": {
+          "type": "string",
+          "enum": ["completed"],
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "amount",
+        "method",
+        "accountNumber",
+        "accountHolder",
+        "referenceCode",
+        "status",
+        "createdAt"
+      ]
+    },
+    "BingoRound": {
+      "title": "BingoRound",
+      "description": "Completed 75-ball Bingo round result.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "stake": {
+          "type": "number"
+        },
+        "payout": {
+          "type": "number"
+        },
+        "multiplier": {
+          "type": "number"
+        },
+        "ballsDrawnCount": {
+          "type": "number"
+        },
+        "pattern": {
+          "type": "string",
+          "enum": ["row", "column", "diagonal", "four_corners", "none"],
+          "maxLength": 30
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["won", "lost"],
+          "maxLength": 10
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "stake",
+        "payout",
+        "multiplier",
+        "ballsDrawnCount",
+        "pattern",
+        "outcome",
+        "createdAt"
+      ]
+    },
+    "WalletTransaction": {
+      "title": "WalletTransaction",
+      "description": "Ledger entry for bonus claims, deposits, Bingo wagers, Bingo wins, and withdrawals.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["daily_bonus", "deposit", "withdrawal", "bingo_wager", "bingo_win"],
+          "maxLength": 20
+        },
+        "amount": {
+          "type": "number"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["credit", "debit"],
+          "maxLength": 10
+        },
+        "balanceAfter": {
+          "type": "number"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140
+        },
+        "referenceId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "type",
+        "amount",
+        "direction",
+        "balanceAfter",
+        "description",
+        "referenceId",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Private member account document storing current ETB balance and aggregate stats."
+    },
+    "/users/{userId}/bonusClaims/{claimId}": {
+      "schema": { "$ref": "#/entities/BonusClaim" },
+      "description": "Daily 100,000 ETB bonus claim records indexed by YYYY-MM-DD."
+    },
+    "/users/{userId}/deposits/{depositId}": {
+      "schema": { "$ref": "#/entities/DepositRecord" },
+      "description": "Member deposit receipts via Telebirr and Commercial Bank of Ethiopia."
+    },
+    "/users/{userId}/withdrawals/{withdrawalId}": {
+      "schema": { "$ref": "#/entities/WithdrawalRecord" },
+      "description": "Member withdrawal receipts and destination payout records."
+    },
+    "/users/{userId}/bingoRounds/{roundId}": {
+      "schema": { "$ref": "#/entities/BingoRound" },
+      "description": "Historical log of played 75-ball Bingo rounds."
+    },
+    "/users/{userId}/transactions/{txId}": {
+      "schema": { "$ref": "#/entities/WalletTransaction" },
+      "description": "Immutable financial ledger entries for the member wallet."
+    }
+  }
+}

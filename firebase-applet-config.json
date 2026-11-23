@@ -1,0 +1,12 @@
+{
+  "projectId": "admas-bingo",
+  "appId": "1:253014691803:web:e61f8150cf28d6436821fe",
+  "apiKey": "AIzaSyAZvYPMxh96cy6UDguHaRvLvAUy6_pJkj8",
+  "authDomain": "admas-bingo.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-d9942d0d-fa62-4bdf-90af-e2267490ab57",
+  "storageBucket": "admas-bingo.firebasestorage.app",
+  "messagingSenderId": "253014691803",
+  "measurementId": "",
+  "oAuthClientId": "253014691803-6cqmv8jepgijo0c1eq2hd5adh6ohbebk.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
+}
