@@ -1,11 +1,23 @@
 import React, { useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CheckCircle2, Landmark, Smartphone } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Check,
+  CheckCircle2,
+  Copy,
+  Download,
+  Landmark,
+  QrCode,
+  Smartphone,
+} from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { formatEtb, getDict } from '../i18n';
 import { processDeposit, processWithdrawal } from '../services/walletService';
 import {
   CashierMethod,
   DepositRecord,
   Language,
+  ToastItem,
   UserAccount,
   WithdrawalRecord,
 } from '../types';
@@ -17,6 +29,7 @@ interface WithdrawPanelProps {
   deposits: DepositRecord[];
   withdrawals: WithdrawalRecord[];
   soundEnabled: boolean;
+  onNotify: (toast: Omit<ToastItem, 'id'>) => void;
 }
 
 type CashierMode = 'withdraw' | 'deposit';
@@ -26,12 +39,25 @@ const CASHIER_METHODS: CashierMethod[] = ['telebirr', 'cbe_bank'];
 const QUICK_WITHDRAW_AMOUNTS = [10000, 25000, 50000, 100000];
 const QUICK_DEPOSIT_AMOUNTS = [1000, 5000, 10000, 50000, 100000];
 
+function buildWithdrawalQrPayload(wd: WithdrawalRecord): string {
+  return JSON.stringify({
+    protocol: wd.method === 'telebirr' ? 'TELEBIRR_PAYOUT_VOUCHER' : 'CBE_PAYOUT_VOUCHER',
+    reference: wd.referenceCode,
+    amountEtb: wd.amount,
+    currency: 'ETB',
+    recipientAccount: wd.accountNumber,
+    recipientName: wd.accountHolder,
+    status: wd.status,
+  });
+}
+
 export function WithdrawPanel({
   lang,
   account,
   deposits,
   withdrawals,
   soundEnabled,
+  onNotify,
 }: WithdrawPanelProps) {
   const t = getDict(lang);
   const [mode, setMode] = useState<CashierMode>('withdraw');
@@ -45,6 +71,7 @@ export function WithdrawPanel({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [withdrawReceipt, setWithdrawReceipt] = useState<WithdrawalRecord | null>(null);
   const [depositReceipt, setDepositReceipt] = useState<DepositRecord | null>(null);
+  const [copiedRef, setCopiedRef] = useState(false);
 
   const numericAmount = Math.round(Number(amount) || 0);
 
@@ -66,7 +93,6 @@ export function WithdrawPanel({
   const handleModeChange = (nextMode: CashierMode) => {
     setMode(nextMode);
     setErrorMsg(null);
-    setWithdrawReceipt(null);
     setDepositReceipt(null);
     if (nextMode === 'deposit') {
       setAmount('10000');
@@ -81,6 +107,29 @@ export function WithdrawPanel({
     const prefix = method === 'telebirr' ? 'TB' : 'FT';
     const code = `${prefix}${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
     setTransactionRef(code);
+  };
+
+  const handleCopyRef = (refCode: string) => {
+    if (typeof navigator === 'undefined') return;
+    navigator.clipboard
+      ?.writeText(refCode)
+      .then(() => {
+        setCopiedRef(true);
+        window.setTimeout(() => setCopiedRef(false), 2000);
+      })
+      .catch(() => {});
+  };
+
+  const handleDownloadQr = (refCode: string) => {
+    const canvas = document.getElementById('withdrawal-qr-canvas') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const pngUrl = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = pngUrl;
+    link.download = `${refCode}-qr.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -101,8 +150,19 @@ export function WithdrawPanel({
         setWithdrawReceipt(record);
         setDepositReceipt(null);
         setAmount('');
+        onNotify({
+          variant: 'success',
+          title: t.toastWithdrawSuccessTitle,
+          message: `${formatEtb(record.amount)} ${t.birr} · ${t.methods[record.method]} (${record.accountNumber}) · ${record.referenceCode}`,
+        });
       } catch (err) {
-        setErrorMsg(err instanceof Error ? err.message : 'Withdrawal failed');
+        const msg = err instanceof Error ? err.message : 'Withdrawal failed';
+        setErrorMsg(msg);
+        onNotify({
+          variant: 'error',
+          title: t.toastWithdrawErrorTitle,
+          message: msg,
+        });
       } finally {
         setSubmitting(false);
       }
@@ -121,10 +181,20 @@ export function WithdrawPanel({
       });
       playBonusSound(soundEnabled);
       setDepositReceipt(record);
-      setWithdrawReceipt(null);
       setTransactionRef('');
+      onNotify({
+        variant: 'success',
+        title: t.toastDepositSuccessTitle,
+        message: `+${formatEtb(record.amount)} ${t.birr} · ${t.methods[record.method]} · ${record.referenceCode}`,
+      });
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Deposit failed');
+      const msg = err instanceof Error ? err.message : 'Deposit failed';
+      setErrorMsg(msg);
+      onNotify({
+        variant: 'error',
+        title: t.toastDepositErrorTitle,
+        message: msg,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -178,18 +248,72 @@ export function WithdrawPanel({
           </span>
         </div>
 
+        {/* Withdrawal QR Code Voucher Card */}
         {withdrawReceipt && (
-          <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/35 space-y-2">
-            <div className="flex items-center gap-2 text-emerald-300 font-semibold text-sm">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{t.withdrawSuccessTitle}</span>
+          <div className="p-5 rounded-2xl bg-[#082118] border border-[#eab308]/40 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-[#facc15] font-semibold text-sm">
+                <QrCode className="w-4 h-4 shrink-0" />
+                <span>{t.qrVoucherTitle}</span>
+              </div>
+              <span className="font-mono-num text-xs text-emerald-300">
+                {withdrawReceipt.referenceCode}
+              </span>
             </div>
-            <div className="text-xs text-[#e7e5df] flex flex-wrap items-center gap-2 font-mono-num">
-              <span>{withdrawReceipt.referenceCode}</span>
-              <span aria-hidden="true">·</span>
-              <span>-{formatEtb(withdrawReceipt.amount)} {t.etb}</span>
-              <span aria-hidden="true">·</span>
-              <span>{t.methods[withdrawReceipt.method]}</span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center">
+              <div className="sm:col-span-5 flex justify-center">
+                <div className="bg-white p-3 rounded-xl shadow-lg">
+                  <QRCodeCanvas
+                    id="withdrawal-qr-canvas"
+                    value={buildWithdrawalQrPayload(withdrawReceipt)}
+                    size={176}
+                    level="M"
+                    includeMargin
+                  />
+                </div>
+              </div>
+
+              <div className="sm:col-span-7 space-y-3">
+                <div>
+                  <p className="text-xs text-[#9fb3aa]">{t.amountEtb}</p>
+                  <p className="font-mono-num text-2xl font-bold text-[#facc15]">
+                    {formatEtb(withdrawReceipt.amount)} {t.birr}
+                  </p>
+                </div>
+
+                <div className="text-xs text-[#d6dfd9] space-y-1 font-mono-num">
+                  <p>
+                    {t.methods[withdrawReceipt.method]} · {withdrawReceipt.accountNumber}
+                  </p>
+                  <p>{withdrawReceipt.accountHolder}</p>
+                </div>
+
+                <p className="text-xs text-[#cbd5d0] leading-relaxed">{t.qrScanHint}</p>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadQr(withdrawReceipt.referenceCode)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#eab308] text-[#071f17] text-xs font-semibold hover:bg-[#facc15] whitespace-nowrap"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>{t.qrDownloadPng}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyRef(withdrawReceipt.referenceCode)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 text-xs font-medium text-[#f4f1ea] hover:bg-white/10 whitespace-nowrap"
+                  >
+                    {copiedRef ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-300" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                    <span>{copiedRef ? t.qrCopied : t.qrCopyRef}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -436,7 +560,7 @@ export function WithdrawPanel({
           ) : (
             <ul className="divide-y divide-white/10">
               {withdrawals.map((wd) => (
-                <li key={wd.id} className="py-3.5 flex items-start justify-between gap-4">
+                <li key={wd.id} className="py-3.5 flex items-center justify-between gap-3">
                   <div className="space-y-1 min-w-0">
                     <p className="text-sm font-semibold text-[#f4f1ea] truncate">
                       {t.methods[wd.method]}
@@ -445,13 +569,23 @@ export function WithdrawPanel({
                       {wd.accountNumber} · {wd.referenceCode}
                     </p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-mono-num text-sm font-bold text-[#facc15]">
-                      -{formatEtb(wd.amount)} {t.etb}
-                    </p>
-                    <p className="text-xs text-emerald-300">
-                      {wd.createdAt ? wd.createdAt.toDate().toLocaleDateString() : 'Today'}
-                    </p>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right">
+                      <p className="font-mono-num text-sm font-bold text-[#facc15]">
+                        -{formatEtb(wd.amount)} {t.etb}
+                      </p>
+                      <p className="text-xs text-emerald-300">
+                        {wd.createdAt ? wd.createdAt.toDate().toLocaleDateString() : 'Today'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setWithdrawReceipt(wd)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/15 bg-white/5 text-xs font-medium text-[#f4f1ea] hover:bg-white/10 whitespace-nowrap"
+                    >
+                      <QrCode className="w-3.5 h-3.5 text-[#facc15]" />
+                      <span>{t.qrViewButton}</span>
+                    </button>
                   </div>
                 </li>
               ))}

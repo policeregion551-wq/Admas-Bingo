@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
 import { Coins, Volume2, VolumeX } from 'lucide-react';
 import { BingoArena } from './components/BingoArena';
@@ -6,6 +6,7 @@ import { DailyBonusPanel } from './components/DailyBonusPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LedgerPanel } from './components/LedgerPanel';
 import { PrivateAuthScreen } from './components/PrivateAuthScreen';
+import { ToastContainer } from './components/ToastContainer';
 import { TopBar } from './components/TopBar';
 import { WithdrawPanel } from './components/WithdrawPanel';
 import { auth, googleProvider } from './firebase';
@@ -25,6 +26,7 @@ import {
   BingoRound,
   DepositRecord,
   Language,
+  ToastItem,
   UserAccount,
   WalletTransaction,
   WithdrawalRecord,
@@ -48,8 +50,21 @@ function AppShell() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('arena');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [claimingBonus, setClaimingBonus] = useState<boolean>(false);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const t = getDict(lang);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const addToast = useCallback((toast: Omit<ToastItem, 'id'>) => {
+    const id = `toast_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    setToasts((prev) => [...prev.slice(-3), { ...toast, id }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((item) => item.id !== id));
+    }, 5500);
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (nextUser) => {
@@ -116,8 +131,18 @@ function AppShell() {
     try {
       await claimDailyBonus(account);
       playBonusSound(soundEnabled);
+      addToast({
+        variant: 'success',
+        title: t.toastBonusSuccessTitle,
+        message: `+${formatEtb(DAILY_BONUS_ETB)} ${t.birr}`,
+      });
     } catch (err) {
-      setRuntimeError(err instanceof Error ? err : new Error(String(err)));
+      const msg = err instanceof Error ? err.message : 'Bonus claim failed';
+      addToast({
+        variant: 'error',
+        title: t.toastBonusErrorTitle,
+        message: msg,
+      });
     } finally {
       setClaimingBonus(false);
     }
@@ -264,6 +289,7 @@ function AppShell() {
             deposits={deposits}
             withdrawals={withdrawals}
             soundEnabled={soundEnabled}
+            onNotify={addToast}
           />
         )}
 
@@ -276,6 +302,8 @@ function AppShell() {
           />
         )}
       </main>
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -19,6 +19,15 @@ export type WithdrawalMethod =
   | 'awash_bank'
   | 'abyssinia_bank';
 
+export type ToastVariant = 'success' | 'error';
+
+export interface ToastItem {
+  id: string;
+  variant: ToastVariant;
+  title: string;
+  message: string;
+}
+
 export interface UserAccount {
   uid: string;
   displayName: string;
