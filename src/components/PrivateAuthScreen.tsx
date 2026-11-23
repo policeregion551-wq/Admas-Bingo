@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
+import { Check, Copy, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
 import { getDict } from '../i18n';
 import { Language } from '../types';
 
@@ -22,6 +22,17 @@ export function PrivateAuthScreen({
 }: PrivateAuthScreenProps) {
   const t = getDict(lang);
   const [imgFailed, setImgFailed] = useState(false);
+  const [copiedHost, setCopiedHost] = useState(false);
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isUnauthorizedDomain = Boolean(errorMsg && errorMsg.includes('unauthorized-domain'));
+
+  const handleCopyHost = () => {
+    if (!currentHost || typeof navigator === 'undefined') return;
+    navigator.clipboard?.writeText(currentHost).then(() => {
+      setCopiedHost(true);
+      window.setTimeout(() => setCopiedHost(false), 2000);
+    }).catch(() => {});
+  };
 
   return (
     <div className="min-h-screen bg-[#071f17] text-[#f4f1ea] flex flex-col">
@@ -95,8 +106,30 @@ export function PrivateAuthScreen({
             </div>
 
             {errorMsg && (
-              <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-400/30 text-sm text-red-200 max-w-xl">
-                {errorMsg}
+              <div className="p-4 rounded-xl bg-red-950/60 border border-red-400/30 text-sm text-red-100 max-w-xl space-y-3">
+                <p className="font-mono-num text-xs text-red-200">{errorMsg}</p>
+                {isUnauthorizedDomain && currentHost && (
+                  <div className="pt-2 border-t border-red-400/20 space-y-2 text-xs text-[#f4f1ea]">
+                    <p className="leading-relaxed">
+                      {lang === 'am'
+                        ? 'ይህ ዶሜይን በFirebase Console (admas-bingo → Authentication → Settings → Authorized domains) ውስጥ መጨመር አለበት፡'
+                        : 'Add this domain to Firebase Console (admas-bingo → Authentication → Settings → Authorized domains):'}
+                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2 bg-black/35 border border-white/15 rounded-lg px-3 py-2">
+                      <code className="font-mono-num text-xs text-[#facc15] break-all">
+                        {currentHost}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={handleCopyHost}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#eab308] text-[#071f17] font-semibold text-xs hover:bg-[#facc15] whitespace-nowrap shrink-0"
+                      >
+                        {copiedHost ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedHost ? (lang === 'am' ? 'ተቀድቷል' : 'Copied') : (lang === 'am' ? 'ዶሜይን ቅዳ' : 'Copy Domain')}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
